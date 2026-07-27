@@ -35,6 +35,34 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        # Ex.2.1 - Generate trap collection 
+        self.toxic_traps = set()
+        while len(self.toxic_traps) < 3:  # Adjust number of traps as needed
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            trap_pos = (tx, ty)
+            if (
+                trap_pos != (0, 0)
+                and trap_pos not in self.walls
+                and trap_pos not in self.food_positions
+            ):
+                self.toxic_traps.add(trap_pos)
+
+        # Ex 2.2 - Generate toxic traps
+        self.toxic_traps = set()
+        while len(self.toxic_traps) < 3:
+            tx = random.randint(0, self.width - 1)
+            ty = random.randint(0, self.height - 1)
+            trap_pos = (tx, ty)
+            if (
+                trap_pos != (0, 0)
+                and trap_pos not in self.walls
+                and trap_pos not in self.food_positions
+            ):
+                self.toxic_traps.add(trap_pos)
+
+        
+
         self.score = 0
         self.steps = 0
         self.collision = False
@@ -45,6 +73,7 @@ class VisualGridHuntGame:
             'opponent_positions': [list(op) for op in self.opponents],
             'smells_food': tuple(self.agent_pos) in self.food_positions,
             'hit_wall': tuple(self.agent_pos) in self.walls,
+            "smells_toxin": tuple(self.agent_pos) in self.toxic_traps,
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions)
@@ -73,6 +102,9 @@ class VisualGridHuntGame:
             self.food_positions.remove(tuple_pos)
             self.score += 20
 
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
             if move == 'Up' and op[1] < self.height - 1:
@@ -89,7 +121,7 @@ class VisualGridHuntGame:
                 self.collision = True
 
     def is_done(self) -> bool:
-        return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+        return len(self.food_positions) == 0 or self.steps >=60 or self.collision
 
 
 class GridGameGUI:
@@ -152,6 +184,16 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - oy) * self.cell_size + offset
             self.canvas.create_rectangle(x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6, fill="#990000",
                                          outline="#7a0000")
+
+        for tx, ty in self.env.toxic_traps:
+            offset = self.cell_size * 0.25
+            x1 = tx * self.cell_size + offset
+            y1 = (self.env.height - 1 - ty) * self.cell_size + offset
+            x2 = x1 + self.cell_size * 0.5
+            y2 = y1 + self.cell_size * 0.5
+            
+            self.canvas.create_line(x1, y1, x2, y2, fill="#dc2626", width=3)
+            self.canvas.create_line(x1, y2, x2, y1, fill="#dc2626", width=3)
 
         ax, ay = self.env.agent_pos
         offset = self.cell_size * 0.15
