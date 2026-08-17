@@ -1,86 +1,7 @@
 # visual_grid_game.py
 import random
 import tkinter as tk
-
-
-class SimpleReflexAgent:
-    """A reflex agent that selects actions using strictly stateless IF-THEN rules."""
-
-    def sense_and_act(self, percept: dict) -> str:
-        if percept.get('food_here'):
-            return 'Stay'
-        elif percept.get('wall_ahead'):
-            return 'Left'
-        else:
-            return 'Up'
-
-
-class ModelBasedAgent:
-    """A model-based agent that tracks internal state (visited cells, coordinates, orientation) to avoid loops."""
-
-    def __init__(self):
-        self.visited_cells = set()
-        self.current_pos = [0, 0]
-        self.facing = 'Up'
-        self.directions = ['Up', 'Right', 'Down', 'Left']
-
-    def _get_relative_offsets(self):
-        idx = self.directions.index(self.facing)
-        front_dir = self.directions[idx]
-        left_dir = self.directions[(idx - 1) % 4]
-        right_dir = self.directions[(idx + 1) % 4]
-        return front_dir, left_dir, right_dir
-
-    def _get_neighbor_pos(self, pos, direction):
-        x, y = pos
-        if direction == 'Up':
-            return (x, y + 1)
-        elif direction == 'Down':
-            return (x, y - 1)
-        elif direction == 'Left':
-            return (x - 1, y)
-        elif direction == 'Right':
-            return (x + 1, y)
-        return (x, y)
-
-    def sense_and_act(self, percept: dict) -> str:
-        self.visited_cells.add(tuple(self.current_pos))
-
-        if percept.get('food_here'):
-            return 'Stay'
-
-        front_dir, left_dir, right_dir = self._get_relative_offsets()
-
-        left_pos = self._get_neighbor_pos(self.current_pos, left_dir)
-        right_pos = self._get_neighbor_pos(self.current_pos, right_dir)
-
-        left_is_visited = left_pos in self.visited_cells
-        right_is_visited = right_pos in self.visited_cells
-
-        if percept.get('wall_ahead'):
-            if left_is_visited and not right_is_visited:
-                chosen_action = right_dir
-            elif right_is_visited and not left_is_visited:
-                chosen_action = left_dir
-            else:
-                chosen_action = left_dir
-        else:
-            front_pos = self._get_neighbor_pos(self.current_pos, front_dir)
-            if front_pos in self.visited_cells:
-                if not left_is_visited:
-                    chosen_action = left_dir
-                elif not right_is_visited:
-                    chosen_action = right_dir
-                else:
-                    chosen_action = front_dir
-            else:
-                chosen_action = front_dir
-
-        if chosen_action in ['Up', 'Down', 'Left', 'Right']:
-            self.facing = chosen_action
-            self.current_pos = list(self._get_neighbor_pos(self.current_pos, chosen_action))
-
-        return chosen_action
+from agent import SearchAgent
 
 
 class VisualGridHuntGame:
@@ -125,18 +46,6 @@ class VisualGridHuntGame:
             ):
                 self.toxic_traps.add(trap_pos)
 
-        self.toxic_traps = set()
-        while len(self.toxic_traps) < 3:
-            tx = random.randint(0, self.width - 1)
-            ty = random.randint(0, self.height - 1)
-            trap_pos = (tx, ty)
-            if (
-                trap_pos != (0, 0)
-                and trap_pos not in self.walls
-                and trap_pos not in self.food_positions
-            ):
-                self.toxic_traps.add(trap_pos)
-
         self.score = 0
         self.steps = 0
         self.collision = False
@@ -166,7 +75,12 @@ class VisualGridHuntGame:
             'smells_food_ahead': ahead_pos in self.food_positions,
             'collision': self.collision,
             'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'remaining_food': len(self.food_positions),
+            # --- Exposed for Search Agents (Step 1.1 & Fix) ---
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions),
+            'agent_pos': tuple(self.agent_pos)
         }
 
     def execute_action(self, action: str):
@@ -226,8 +140,10 @@ class GridGameGUI:
         self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
-                                      custom_walls=walls)
-        self.agent = ModelBasedAgent()
+                                     custom_walls=walls)
+        
+        # You can change search strategy here: 'bfs', 'dfs', or 'ucs'
+        self.agent = SearchAgent(search_strategy='bfs')
 
         max_canvas_dim = 600
         self.cell_size = max(20, min(max_canvas_dim // self.env.width, max_canvas_dim // self.env.height))
@@ -276,7 +192,7 @@ class GridGameGUI:
             x1 = ox * self.cell_size + offset
             y1 = (self.env.height - 1 - oy) * self.cell_size + offset
             self.canvas.create_rectangle(x1, y1, x1 + self.cell_size * 0.6, y1 + self.cell_size * 0.6, fill="#990000",
-                                         outline="#7a0000")
+                                       outline="#7a0000")
 
         for tx, ty in self.env.toxic_traps:
             offset = self.cell_size * 0.25
