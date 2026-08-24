@@ -1,6 +1,7 @@
 # agent.py
 from collections import deque
 import heapq
+import math
 import random
 import tkinter as tk
 
@@ -20,13 +21,21 @@ class GreedyGridAgent:
 
 
 class SearchAgent:
-    """An agent that uses uninformed search strategies (BFS, DFS, UCS) to navigate and find goals."""
-
+    """An agent that uses uninformed and informed search strategies to navigate and find goals."""
+   
     def __init__(self, search_strategy='bfs'):
         self.search_strategy = search_strategy.lower()
         self.plan = []
-        self.active_algo = search_strategy.upper()  # 'BFS', 'DFS', or 'UCS'
+        self.active_algo = search_strategy.upper()  # 'BFS', 'DFS', 'UCS', or 'ASTAR'
         self.last_agent_pos = None
+
+    def manhattan_distance(self, pos, goal):
+        """Calculates the Manhattan distance between two points."""
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        """Calculates the straight-line Euclidean distance between two points."""
+        return math.sqrt((pos[0] - goal[0])**2 + (pos[1] - goal[1])**2)
 
     def _get_neighbors(self, pos, grid_size, walls):
         """Returns valid neighboring (x, y) coordinates and the action taken to reach them."""
@@ -101,6 +110,45 @@ class SearchAgent:
                     heapq.heappush(frontier, (new_cost, neighbor, path + [action]))
         return []
 
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        """A* Search evaluation: f(n) = g(n) + h(n)."""
+        # Calculate initial heuristic
+        if heuristic_type.lower() == 'euclidean':
+            h_init = self.euclidean_distance(start_pos, goal_pos)
+        else:
+            h_init = self.manhattan_distance(start_pos, goal_pos)
+        
+        g_init = 0
+        f_init = g_init + h_init
+        
+        # Priority queue stores tuples: (f_cost, g_cost, current_pos, path_taken)
+        frontier = [(f_init, g_init, start_pos, [])]
+        reached_states = set()
+
+        while frontier:
+            f_cost, g_cost, current_pos, path_taken = heapq.heappop(frontier)
+
+            if current_pos == goal_pos:
+                return path_taken
+
+            if current_pos in reached_states:
+                continue
+            reached_states.add(current_pos)
+
+            for action, neighbor in self._get_neighbors(current_pos, grid_size, walls):
+                if neighbor not in reached_states:
+                    g_new = g_cost + 1
+                    
+                    if heuristic_type.lower() == 'euclidean':
+                        h_new = self.euclidean_distance(neighbor, goal_pos)
+                    else:
+                        h_new = self.manhattan_distance(neighbor, goal_pos)
+                        
+                    f_new = g_new + h_new
+                    heapq.heappush(frontier, (f_new, g_new, neighbor, path_taken + [action]))
+                    
+        return []
+
     def sense_and_act(self, percept: dict) -> str:
         grid_size = percept.get('grid_size', (10, 10))
         walls = percept.get('walls', [])
@@ -125,6 +173,8 @@ class SearchAgent:
                 self.plan = self.dfs_search(agent_pos, target_pos, grid_size, walls)
             elif algo == 'ucs':
                 self.plan = self.ucs_search(agent_pos, target_pos, grid_size, walls)
+            elif algo == 'astar':
+                self.plan = self.astar_search(agent_pos, target_pos, walls, grid_size, heuristic_type='manhattan')
             else:
                 self.plan = self.bfs_search(agent_pos, target_pos, grid_size, walls)
 
@@ -210,7 +260,7 @@ class VisualGridHuntGame:
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions),
-            # --- Exposed for Search Agents (Step 1.1 & Fix) ---
+            # --- Exposed for Search Agents ---
             'grid_size': (self.width, self.height),
             'walls': list(self.walls),
             'all_food': list(self.food_positions),
@@ -274,10 +324,10 @@ class GridGameGUI:
         self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
-                                     custom_walls=walls)
+                                   custom_walls=walls)
         
-        # You can change search strategy here: 'bfs', 'dfs', or 'ucs'
-        self.agent = SearchAgent(search_strategy='bfs')
+        # You can test A* by changing strategy to 'astar'
+        self.agent = SearchAgent(search_strategy='astar')
 
         max_canvas_dim = 600
         self.cell_size = max(20, min(max_canvas_dim // self.env.width, max_canvas_dim // self.env.height))
@@ -366,6 +416,16 @@ class GridGameGUI:
 
 
 if __name__ == "__main__":
+    # --- Testing Checkpoint ---
+    test_agent = SearchAgent()
+    start_pos = (0, 0)
+    goal_pos = (3, 4)
+    
+    print(f"Manhattan Distance: {test_agent.manhattan_distance(start_pos, goal_pos)}")
+    print(f"Euclidean Distance: {test_agent.euclidean_distance(start_pos, goal_pos)}")
+    print("-" * 30)
+    
+    # --- Original GUI Execution ---
     root = tk.Tk()
     app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
     root.mainloop()
