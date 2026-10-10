@@ -4,6 +4,7 @@ import heapq
 import math
 import random
 import tkinter as tk
+from logic_engine import KnowledgeBase
 
 
 # ==========================================
@@ -28,6 +29,9 @@ class SearchAgent:
         self.plan = []
         self.active_algo = search_strategy.upper()  # 'BFS', 'DFS', 'UCS', or 'ASTAR'
         self.last_agent_pos = None
+        self.kb = KnowledgeBase()
+        self.kb.tell_rule(['TargetVisible', 'HasDust'], 'SafeToEngage')
+        self.kb.tell_rule(['SafeToEngage', 'BloodseekerMissing'], 'Retreat')
 
     def manhattan_distance(self, pos, goal):
         """Calculates the Manhattan distance between two points."""
@@ -110,8 +114,9 @@ class SearchAgent:
                     heapq.heappush(frontier, (new_cost, neighbor, path + [action]))
         return []
 
-    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan', tile_facts=None):
         """A* Search evaluation: f(n) = g(n) + h(n)."""
+        tile_facts = tile_facts or {}
         # Calculate initial heuristic
         if heuristic_type.lower() == 'euclidean':
             h_init = self.euclidean_distance(start_pos, goal_pos)
@@ -137,6 +142,13 @@ class SearchAgent:
 
             for action, neighbor in self._get_neighbors(current_pos, grid_size, walls):
                 if neighbor not in reached_states:
+                    self.kb.clear_facts()
+                    for fact in tile_facts.get(neighbor, []):
+                        self.kb.tell_fact(fact)
+                    self.kb.forward_chain()
+                    if 'Retreat' in self.kb.facts:
+                        continue
+
                     g_new = g_cost + 1
                     
                     if heuristic_type.lower() == 'euclidean':
@@ -174,7 +186,14 @@ class SearchAgent:
             elif algo == 'ucs':
                 self.plan = self.ucs_search(agent_pos, target_pos, grid_size, walls)
             elif algo == 'astar':
-                self.plan = self.astar_search(agent_pos, target_pos, walls, grid_size, heuristic_type='manhattan')
+                tile_facts = {
+                    (1, 0): ['TargetVisible', 'HasDust', 'BloodseekerMissing'],
+                    (0, 1): ['TargetVisible', 'HasDust'],
+                }
+                self.plan = self.astar_search(
+                    agent_pos, target_pos, walls, grid_size,
+                    heuristic_type='manhattan', tile_facts=tile_facts
+                )
             else:
                 self.plan = self.bfs_search(agent_pos, target_pos, grid_size, walls)
 
